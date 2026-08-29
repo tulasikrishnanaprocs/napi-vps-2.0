@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Napi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #F1F3F6;
+    --surface: #FFFFFF;
+    --ink: #1C1F2E;
+    --ink-soft: #5B6172;
+    --line: #DDE1E8;
+    --primary: #4C3FE8;
+    --primary-ink: #FFFFFF;
+    --user-bubble: #4C3FE8;
+    --assistant-bubble: #FFFFFF;
+    --warn-bg: #FFF1E9;
+    --warn-ink: #A3491E;
+    --rec: #DB4141;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', system-ui, sans-serif;
+    min-height: 100vh;
+  }
+  h1, h2, .brand { font-family: 'Space Grotesk', system-ui, sans-serif; }
+
+  /* ---- Auth screen ---- */
+  #auth-screen {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .auth-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 36px 32px;
+    width: 100%;
+    max-width: 360px;
+  }
+  .auth-card .brand {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 4px;
+  }
+  .auth-card .tagline {
+    color: var(--ink-soft);
+    font-size: 14px;
+    margin: 0 0 24px;
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    margin: 14px 0 6px;
+    color: var(--ink-soft);
+  }
+  input[type=email], input[type=password], input[type=text] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  input:focus, button:focus, .icon-btn:focus {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+  }
+  .btn-primary {
+    width: 100%;
+    margin-top: 22px;
+    padding: 11px;
+    background: var(--primary);
+    color: var(--primary-ink);
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .btn-primary:disabled { opacity: 0.6; cursor: default; }
+  .auth-toggle {
+    margin-top: 16px;
+    font-size: 13px;
+    text-align: center;
+    color: var(--ink-soft);
+  }
+  .auth-toggle a { color: var(--primary); text-decoration: none; font-weight: 500; cursor: pointer; }
+  .auth-error { color: #C4432B; font-size: 13px; margin-top: 10px; min-height: 16px; }
+
+  /* ---- Chat screen ---- */
+  #chat-screen { display: none; min-height: 100vh; flex-direction: column; }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top: 0;
+  }
+  header .brand { font-size: 19px; font-weight: 700; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .usage-pill {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: var(--bg);
+    color: var(--ink-soft);
+    border: 1px solid var(--line);
+    white-space: nowrap;
+    display: flex;
+    gap: 8px;
+  }
+  .usage-pill .seg.tight { color: var(--warn-ink); }
+  .icon-btn {
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .icon-btn:hover { background: var(--bg); }
+
+  main {
+    flex: 1;
+    max-width: 720px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 24px 16px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .empty-state {
+    margin: auto;
+    text-align: center;
+    color: var(--ink-soft);
+    max-width: 360px;
+  }
+  .empty-state .brand { font-size: 22px; margin-bottom: 6px; color: var(--ink); }
+  .msg-row { display: flex; flex-direction: column; }
+  .msg-row.user { align-items: flex-end; }
+  .msg-row.assistant, .msg-row.limit { align-items: flex-start; }
+  .bubble {
+    max-width: 78%;
+    padding: 11px 15px;
+    border-radius: var(--radius);
+    font-size: 14.5px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+  .msg-row.user .bubble {
+    background: var(--user-bubble);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+  .msg-row.assistant .bubble {
+    background: var(--assistant-bubble);
+    border: 1px solid var(--line);
+    border-bottom-left-radius: 4px;
+  }
+  .msg-row.limit .bubble {
+    background: var(--warn-bg);
+    color: var(--warn-ink);
+    border: none;
+  }
+  .voice-tag {
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin: 2px 6px;
+  }
+  .typing-dots { display: inline-flex; align-items: center; gap: 4px; padding: 3px 2px; }
+  .typing-dots span {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--ink-soft);
+    animation: napi-bounce 1.2s infinite ease-in-out;
+  }
+  .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes napi-bounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+    30% { transform: translateY(-4px); opacity: 1; }
+  }
+
+  form#composer {
+    max-width: 720px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 12px 16px 20px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+  }
+  #msg-input {
+    flex: 1;
+    resize: none;
+    padding: 11px 14px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    font-family: inherit;
+    font-size: 14.5px;
+    background: var(--surface);
+    max-height: 140px;
+  }
+  .send-btn {
+    background: var(--primary);
+    color: #fff;
+    border-radius: 10px;
+    padding: 11px 18px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .send-btn:disabled { opacity: 0.5; cursor: default; }
+  .mic-btn {
+    background: var(--bg);
+    color: var(--ink-soft);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 11px 13px;
+    font-size: 14px;
+    position: relative;
+  }
+  .mic-btn.recording {
+    background: var(--rec);
+    color: #fff;
+    border-color: var(--rec);
+    animation: pulse 1.2s infinite;
+  }
+  .mic-btn.ready {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+  .mic-btn:disabled { opacity: 0.5; cursor: default; animation: none; }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(219,65,65,0.45); }
+    70% { box-shadow: 0 0 0 9px rgba(219,65,65,0); }
+    100% { box-shadow: 0 0 0 0 rgba(219,65,65,0); }
+  }
+  .rec-hint {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 16px;
+    font-size: 12px;
+    color: var(--ink-soft);
+    text-align: center;
+    min-height: 16px;
+  }
+
+  @media (max-width: 480px) {
+    header { padding: 12px 14px; }
+    .usage-pill .seg.hide-mobile { display: none; }
+    main { padding: 16px 12px 8px; }
+    .bubble { max-width: 88%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ AUTH SCREEN ============ -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <p class="brand">Napi</p>
+    <p class="tagline">Explanations and research, made simple.</p>
+
+    <label for="email">Email</label>
+    <input type="email" id="email" autocomplete="email" />
+
+    <label for="password">Password</label>
+    <input type="password" id="password" autocomplete="current-password" />
+
+    <div id="region-field" style="display:none;">
+      <label for="region">Region</label>
+      <select id="region" style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;background:var(--bg);color:var(--ink);">
+        <option value="">Select region</option>
+        <option>North India</option>
+        <option>South India</option>
+        <option>East India</option>
+        <option>West India</option>
+        <option>Central India</option>
+        <option>Northeast India</option>
+      </select>
+    </div>
+    <button class="btn-primary" id="auth-submit">Log in</button>
+    <p class="auth-error" id="auth-error"></p>
+    <p class="auth-toggle" id="auth-toggle">New here? <a id="auth-toggle-link">Create an account</a></p>
+  </div>
+</div>
+
+<!-- ============ CHAT SCREEN ============ -->
+<div id="chat-screen">
+  <header>
+    <span class="brand">Napi</span>
+    <div class="header-right">
+      <span class="usage-pill" id="usage-pill">
+        <span class="seg" id="usage-text">💬 — / —</span>
+        <span class="seg hide-mobile" id="usage-voice">🎤 — / —</span>
+      </span>
+      <button class="icon-btn" id="pin-btn">📌 Pin</button>
+      <button class="icon-btn" id="saved-btn">📁 Saved</button>
+      <button class="icon-btn" id="logout-btn">Log out</button>
+    </div>
+  </header>
+
+  <main id="message-list">
+    <div class="empty-state" id="empty-state">
+      <p class="brand">Ask Napi anything</p>
+      <p>Explanations, research, quick answers — no coding tasks. Type or hold the mic. Each new chat starts fresh; pin the ones worth keeping.</p>
+    </div>
+  </main>
+
+  <p class="rec-hint" id="rec-hint"></p>
+  <button type="button" id="stop-audio-btn" style="display:none;align-self:center;margin-bottom:8px;background:var(--rec);color:#fff;border:none;border-radius:999px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer;">⏹ Stop</button>
+  <form id="composer">
+    <button type="button" class="mic-btn" id="mic-btn" title="Tap to talk">🎤</button>
+    <textarea id="msg-input" rows="1" placeholder="Ask Napi something..."></textarea>
+    <button type="submit" class="send-btn" id="send-btn">Send</button>
+  </form>
+</div>
+
+<!-- ============ SAVED CONVERSATIONS MODAL ============ -->
+<div id="saved-modal" style="display:none;position:fixed;inset:0;background:rgba(28,31,46,0.45);align-items:center;justify-content:center;padding:20px;z-index:50;">
+  <div style="background:var(--surface);border-radius:var(--radius);width:100%;max-width:560px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line);">
+      <span id="saved-modal-title" class="brand" style="font-size:17px;">Saved conversations</span>
+      <button class="icon-btn" id="saved-modal-close">✕ Close</button>
+    </div>
+    <div id="saved-modal-body" style="overflow-y:auto;padding:8px 0;flex:1;"></div>
+  </div>
+</div>
+
+<script>
+  // ====== CONFIG — fill these in ======
+  const SUPABASE_URL = "https://yvxehjpnrbgictiepnqa.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_jby4d0lcgr5SvKH6KMrelw_mZUTpDfv";
+  const N8N_CHAT_WEBHOOK_URL = "http://51.79.164.179:5678/webhook/napi-chat";
+  const N8N_VOICE_WEBHOOK_URL = "http://51.79.164.179:5678/webhook/napi-voice";
+  // =====================================
+
+  const supa = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let mode = "login"; // or "signup"
+  let session = null;
+  let history = [];   // in-memory only — cleared unless pinned (shared across text + voice)
+  let quota = { text: { used: 0, limit: "—" }, voice: { used: 0, limit: "—" } };
+
+  const authScreen = document.getElementById("auth-screen");
+  const chatScreen = document.getElementById("chat-screen");
+  const authError = document.getElementById("auth-error");
+  const authSubmit = document.getElementById("auth-submit");
+  const authToggle = document.getElementById("auth-toggle");
+  const messageList = document.getElementById("message-list");
+  const emptyState = document.getElementById("empty-state");
+  const composer = document.getElementById("composer");
+  const msgInput = document.getElementById("msg-input");
+  const sendBtn = document.getElementById("send-btn");
+  const usageTextEl = document.getElementById("usage-text");
+  const usageVoiceEl = document.getElementById("usage-voice");
+  const pinBtn = document.getElementById("pin-btn");
+  const logoutBtn = document.getElementById("logout-btn");
+  const micBtn = document.getElementById("mic-btn");
+  const recHint = document.getElementById("rec-hint");
+  const stopAudioBtn = document.getElementById("stop-audio-btn");
+
+  function wireAuthToggle() {
+    const link = document.getElementById("auth-toggle-link");
+    link.addEventListener("click", () => {
+      mode = mode === "login" ? "signup" : "login";
+      authSubmit.textContent = mode === "login" ? "Log in" : "Create account";
+      authToggle.innerHTML = mode === "login"
+        ? 'New here? <a id="auth-toggle-link">Create an account</a>'
+        : 'Already have an account? <a id="auth-toggle-link">Log in</a>';
+      document.getElementById("region-field").style.display = mode === "signup" ? "block" : "none";
+      wireAuthToggle();
+    });
+  }
+  wireAuthToggle();
+
+  authSubmit.addEventListener("click", async () => {
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+    authError.textContent = "";
+    authSubmit.disabled = true;
+    try {
+      const { data, error } = mode === "login"
+        ? await supa.auth.signInWithPassword({ email, password })
+        : await supa.auth.signUp({ email, password });
+      if (error) throw error;
+      if (mode === "signup" && !data.session) {
+        authError.textContent = "Check your email to confirm, then log in.";
+        authSubmit.disabled = false;
+        return;
+      }
+      session = data.session;
+      if (mode === "signup") {
+        const region = document.getElementById("region").value;
+        if (region) await supa.rpc("update_my_region", { new_region: region });
+      }
+      enterChat();
+    } catch (err) {
+      authError.textContent = err.message || "Something went wrong.";
+    }
+    authSubmit.disabled = false;
+  });
+
+  logoutBtn.addEventListener("click", async () => {
+    await supa.auth.signOut();
+    session = null;
+    history = [];
+    location.reload();
+  });
+
+  async function enterChat() {
+    authScreen.style.display = "none";
+    chatScreen.style.display = "flex";
+    await refreshUsage();
+  }
+
+  async function refreshUsage() {
+    const now = new Date();
+    const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    const { data: sub } = await supa
+      .from("subscriptions")
+      .select("plan_id, plans(text_quota, voice_quota)")
+      .eq("user_id", session.user.id)
+      .single();
+    const { data: usage } = await supa
+      .from("usage_counters")
+      .select("text_used, voice_used")
+      .eq("user_id", session.user.id)
+      .eq("period_start", period)
+      .maybeSingle();
+
+    quota.text.limit = sub?.plans?.text_quota ?? "—";
+    quota.text.used = usage?.text_used ?? 0;
+    quota.voice.limit = sub?.plans?.voice_quota ?? "—";
+    quota.voice.used = usage?.voice_used ?? 0;
+    renderUsage();
+  }
+
+  function renderUsage() {
+    usageTextEl.textContent = `💬 ${quota.text.used} / ${quota.text.limit}`;
+    usageVoiceEl.textContent = `🎤 ${quota.voice.used} / ${quota.voice.limit}`;
+    usageTextEl.classList.toggle("tight", typeof quota.text.limit === "number" && quota.text.used >= quota.text.limit * 0.85);
+    usageVoiceEl.classList.toggle("tight", typeof quota.voice.limit === "number" && quota.voice.used >= quota.voice.limit * 0.85);
+  }
+
+  function addBubble(role, text, tag) {
+    emptyState.style.display = "none";
+    const row = document.createElement("div");
+    row.className = `msg-row ${role}`;
+    if (tag) {
+      const t = document.createElement("span");
+      t.className = "voice-tag";
+      t.textContent = tag;
+      row.appendChild(t);
+    }
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.textContent = text;
+    row.appendChild(bubble);
+    messageList.appendChild(row);
+    row.scrollIntoView({ behavior: "smooth", block: "end" });
+    return row;
+  }
+
+  function addThinkingBubble() {
+    emptyState.style.display = "none";
+    const row = document.createElement("div");
+    row.className = "msg-row assistant";
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span>';
+    row.appendChild(bubble);
+    messageList.appendChild(row);
+    row.scrollIntoView({ behavior: "smooth", block: "end" });
+    return row;
+  }
+
+  // ---------- Text send ----------
+  composer.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    if (pendingVoiceBlob) {
+      const blob = pendingVoiceBlob;
+      pendingVoiceBlob = null;
+      await sendVoice(blob);
+      return;
+    }
+
+    const text = msgInput.value.trim();
+    if (!text) return;
+    msgInput.value = "";
+    sendBtn.disabled = true;
+
+    addBubble("user", text);
+    const thinkingRow = addThinkingBubble();
+
+    try {
+      const res = await fetch(N8N_CHAT_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+        body: JSON.stringify({ user_id: session.user.id, message: text, history })
+      });
+      const data = await res.json();
+      thinkingRow.remove();
+
+      if (data.limit_reached) {
+        addBubble("limit", data.reply);
+      } else {
+        addBubble("assistant", data.reply);
+        history.push({ role: "user", content: text });
+        history.push({ role: "assistant", content: data.reply });
+        quota.text.used += 1;
+        renderUsage();
+      }
+    } catch (err) {
+      thinkingRow.remove();
+      addBubble("limit", "Couldn't reach Napi — check your connection and try again.");
+    }
+    sendBtn.disabled = false;
+  });
+
+  // ---------- Voice: tap to start, tap again to stop and HOLD (send via the Send button) ----------
+  let mediaRecorder = null;
+  let audioChunks = [];
+  let recording = false;
+  let micStream = null;        // requested once, reused across recordings this session
+  let pendingVoiceBlob = null; // recorded but not yet sent
+  let autoSendOnStop = false;  // true when Enter triggered the stop (skip the review step)
+
+  async function getMicStream() {
+    if (micStream && micStream.active) return micStream;
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    return micStream;
+  }
+
+  function stopRecording(autoSend) {
+    if (!recording) return;
+    autoSendOnStop = autoSend;
+    mediaRecorder.stop();
+    recording = false;
+    micBtn.classList.remove("recording");
+  }
+
+  micBtn.addEventListener("click", async () => {
+    if (recording) {
+      stopRecording(false); // tap-to-stop keeps the review-before-sending step
+      return;
+    }
+
+    // Starting a new recording discards any unsent one from before.
+    pendingVoiceBlob = null;
+    micBtn.classList.remove("ready");
+
+    try {
+      const stream = await getMicStream();
+      audioChunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(audioChunks, { type: "audio/webm" });
+        if (autoSendOnStop) {
+          autoSendOnStop = false;
+          micBtn.textContent = "🎤";
+          recHint.textContent = "";
+          sendVoice(blob);
+        } else {
+          pendingVoiceBlob = blob;
+          micBtn.classList.add("ready");
+          micBtn.textContent = "✓";
+          recHint.textContent = "Voice ready — tap Send, or tap mic to re-record";
+        }
+      };
+      mediaRecorder.start();
+      recording = true;
+      micBtn.classList.add("recording");
+      micBtn.textContent = "⏹";
+      recHint.textContent = "Listening — tap again to stop, or press Enter to send";
+    } catch (err) {
+      recHint.textContent = `Mic error: ${err.name || err.message || "unknown"} — check permissions or close other apps using the mic.`;
+    }
+  });
+
+  // Enter finishes a voice message in one step, from anywhere on the page —
+  // stops the recording (or sends an already-stopped, pending one) without
+  // needing focus to be in the text box.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.shiftKey) return;
+    if (document.activeElement === msgInput) return; // let the textarea's own handler manage typed text
+    if (recording) {
+      e.preventDefault();
+      stopRecording(true);
+    } else if (pendingVoiceBlob) {
+      e.preventDefault();
+      composer.requestSubmit();
+    }
+  });
+
+  function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result.split(",")[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  // ---------- Playback control: stop Napi mid-reply ----------
+  let currentAudio = null;
+
+  function stopCurrentAudio() {
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+      currentAudio = null;
+    }
+    stopAudioBtn.style.display = "none";
+  }
+
+  stopAudioBtn.addEventListener("click", stopCurrentAudio);
+
+  async function sendVoice(blob) {
+    if (!blob) return;
+    micBtn.disabled = true;
+    micBtn.classList.remove("ready");
+    micBtn.textContent = "🎤";
+    recHint.textContent = "";
+    const audio_base64 = await blobToBase64(blob);
+
+    const thinkingRow = addThinkingBubble();
+
+    try {
+      const res = await fetch(N8N_VOICE_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+        body: JSON.stringify({
+          user_id: session.user.id,
+          history,
+          audio_base64,
+          mime_type: "audio/webm"
+        })
+      });
+      const data = await res.json();
+      thinkingRow.remove();
+
+      if (data.limit_reached) {
+        addBubble("limit", data.reply_text);
+      } else {
+        addBubble("user", data.transcript || "(heard)", "🎤 voice");
+        addBubble("assistant", data.reply_text, "🎤 voice");
+        history.push({ role: "user", content: data.transcript || "" });
+        history.push({ role: "assistant", content: data.reply_text });
+        quota.voice.used += 1;
+        renderUsage();
+
+        if (data.reply_audio_base64) {
+          stopCurrentAudio();
+          currentAudio = new Audio(`data:audio/wav;base64,${data.reply_audio_base64}`);
+          currentAudio.addEventListener("ended", () => { currentAudio = null; stopAudioBtn.style.display = "none"; });
+          stopAudioBtn.style.display = "inline-flex";
+          currentAudio.play().catch(() => { stopAudioBtn.style.display = "none"; });
+        }
+      }
+    } catch (err) {
+      thinkingRow.remove();
+      addBubble("limit", "Couldn't reach Napi — check your connection and try again.");
+    }
+    micBtn.disabled = false;
+  }
+
+  // Pin: write the current in-memory conversation to Supabase.
+  pinBtn.addEventListener("click", async () => {
+    if (history.length === 0) {
+      alert("Nothing to pin yet — send a message first.");
+      return;
+    }
+    const title = history[0].content.slice(0, 60);
+    const { data: convo, error: convoErr } = await supa
+      .from("conversations")
+      .insert({ user_id: session.user.id, title, is_pinned: true })
+      .select()
+      .single();
+    if (convoErr) { alert("Couldn't pin: " + convoErr.message); return; }
+
+    const rows = history.map(m => ({
+      conversation_id: convo.id,
+      role: m.role,
+      content_type: "text",
+      content: m.content
+    }));
+    const { error: msgErr } = await supa.from("messages").insert(rows);
+    if (msgErr) { alert("Couldn't save messages: " + msgErr.message); return; }
+    alert("Pinned — you can find this in your saved conversations.");
+  });
+
+  // ---------- Saved conversations modal ----------
+  const savedBtn = document.getElementById("saved-btn");
+  const savedModal = document.getElementById("saved-modal");
+  const savedModalClose = document.getElementById("saved-modal-close");
+  const savedModalBody = document.getElementById("saved-modal-body");
+  const savedModalTitle = document.getElementById("saved-modal-title");
+
+  savedBtn.addEventListener("click", async () => {
+    savedModal.style.display = "flex";
+    savedModalTitle.textContent = "Saved conversations";
+    savedModalBody.innerHTML = `<p style="padding:20px;color:var(--ink-soft);">Loading…</p>`;
+
+    const { data, error } = await supa
+      .from("conversations")
+      .select("id, title, created_at")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      savedModalBody.innerHTML = `<p style="padding:20px;color:var(--ink-soft);">Couldn't load: ${error.message}</p>`;
+      return;
+    }
+    if (!data || data.length === 0) {
+      savedModalBody.innerHTML = `<p style="padding:20px;color:var(--ink-soft);">Nothing pinned yet.</p>`;
+      return;
+    }
+
+    savedModalBody.innerHTML = data.map(c => `
+      <div class="saved-row" data-id="${c.id}" style="padding:13px 20px;border-bottom:1px solid var(--line);cursor:pointer;">
+        <div style="font-size:14.5px;font-weight:500;">${(c.title || "Untitled").replace(/</g,"&lt;")}</div>
+        <div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">${new Date(c.created_at).toLocaleString('en-IN')}</div>
+      </div>
+    `).join("");
+
+    savedModalBody.querySelectorAll(".saved-row").forEach(row => {
+      row.addEventListener("click", () => openSavedConversation(row.dataset.id, row.querySelector("div").textContent));
+    });
+  });
+
+  async function openSavedConversation(conversationId, title) {
+    savedModalTitle.textContent = title;
+    savedModalBody.innerHTML = `<p style="padding:20px;color:var(--ink-soft);">Loading…</p>`;
+
+    const { data, error } = await supa
+      .from("messages")
+      .select("role, content, created_at")
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      savedModalBody.innerHTML = `<p style="padding:20px;color:var(--ink-soft);">Couldn't load: ${error.message}</p>`;
+      return;
+    }
+
+    const backRow = `<div id="saved-back" style="padding:10px 20px;color:var(--primary);cursor:pointer;font-size:13px;font-weight:500;">&larr; Back to list</div>`;
+    const msgRows = (data || []).map(m => `
+      <div style="padding:8px 20px;">
+        <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:2px;">${m.role === "user" ? "You" : "Napi"}</div>
+        <div style="font-size:14px;white-space:pre-wrap;">${m.content.replace(/</g,"&lt;")}</div>
+      </div>
+    `).join("");
+
+    savedModalBody.innerHTML = backRow + msgRows;
+    document.getElementById("saved-back").addEventListener("click", () => savedBtn.click());
+  }
+
+  savedModalClose.addEventListener("click", () => { savedModal.style.display = "none"; });
+  savedModal.addEventListener("click", (e) => { if (e.target === savedModal) savedModal.style.display = "none"; });
+
+  msgInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      composer.requestSubmit();
+    }
+  });
+  msgInput.addEventListener("input", () => {
+    msgInput.style.height = "auto";
+    msgInput.style.height = Math.min(msgInput.scrollHeight, 140) + "px";
+  });
+
+  // Restore an existing session on reload
+  supa.auth.getSession().then(({ data }) => {
+    if (data.session) { session = data.session; enterChat(); }
+  });
+</script>
+</body>
+</html>
